@@ -8,14 +8,60 @@ const app = express();
 const PORT = 3000;
 const API_KEY = process.env.PSI_API_KEY;
 
-// Allow the Vite dev server (React) to call this API
 app.use(cors({ origin: "http://localhost:5173" }));
 app.use(express.json());
+
+type Problem = {
+  id: string;
+  title: string;
+  description: string;
+  savingsMs: number;
+  savingsKb: number;
+};
+
+// Remove markdown links and backticks from Lighthouse descriptions
+function cleanText(text: string): string {
+  return text
+    .replace(/\s*\[Learn more[^\]]*\]\([^)]*\)\.?/gi, "")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/`/g, "")
+    .trim();
+}
+
+// Find the audits that failed and could save time or bytes, biggest first
+function extractProblems(audits: Record<string, any>): Problem[] {
+  return Object.entries(audits)
+    .map(([id, audit]) => {
+      const metricSavings = audit.metricSavings ?? {};
+      const savingsMs = Math.max(
+        audit.details?.overallSavingsMs ?? 0,
+        metricSavings.LCP ?? 0,
+        metricSavings.FCP ?? 0,
+      );
+      const savingsBytes = audit.details?.overallSavingsBytes ?? 0;
+      return { id, audit, savingsMs, savingsBytes };
+    })
+    .filter(
+      ({ audit, savingsMs, savingsBytes }) =>
+        (audit.score === null || audit.score < 0.9) &&
+        (savingsMs > 0 || savingsBytes > 0),
+    )
+    .sort(
+      (a, b) => b.savingsMs - a.savingsMs || b.savingsBytes - a.savingsBytes,
+    )
+    .slice(0, 5)
+    .map(({ id, audit, savingsMs, savingsBytes }) => ({
+      id,
+      title: audit.title as string,
+      description: cleanText((audit.description as string) ?? ""),
+      savingsMs: Math.round(savingsMs),
+      savingsKb: Math.round(savingsBytes / 1024),
+    }));
+}
 
 app.post("/api/audit", async (req, res) => {
   const { url } = req.body ?? {};
 
-  // 1. Validate the input
   if (!url || typeof url !== "string") {
     res.status(400).json({ error: "A url is required." });
     return;
@@ -41,7 +87,6 @@ app.post("/api/audit", async (req, res) => {
     return;
   }
 
-  // 2. Build the PageSpeed Insights request
   const endpoint = new URL(
     "https://www.googleapis.com/pagespeedonline/v5/runPagespeed",
   );
@@ -51,7 +96,6 @@ app.post("/api/audit", async (req, res) => {
   endpoint.searchParams.set("key", API_KEY);
 
   try {
-    // 3. Call Google (can take 10 to 30 seconds)
     const response = await fetch(endpoint);
     const data: any = await response.json();
 
@@ -62,13 +106,22 @@ app.post("/api/audit", async (req, res) => {
       return;
     }
 
-    // 4. Return only what we need
     const lighthouse = data.lighthouseResult;
+    const audits = lighthouse.audits;
+
+    const weightBytes = audits["total-byte-weight"]?.numericValue;
+    const requestItems = audits["network-requests"]?.details?.items;
+
     res.json({
       url: parsed.href,
       score: Math.round(lighthouse.categories.performance.score * 100),
-      lcp: lighthouse.audits["largest-contentful-paint"].displayValue,
-      cls: lighthouse.audits["cumulative-layout-shift"].displayValue,
+      lcp: audits["largest-contentful-paint"].displayValue,
+      cls: audits["cumulative-layout-shift"].displayValue,
+      pageWeightMb: weightBytes
+        ? Math.round((weightBytes / 1_000_000) * 100) / 100
+        : null,
+      requests: Array.isArray(requestItems) ? requestItems.length : null,
+      problems: extractProblems(audits),
     });
   } catch (err) {
     console.error(err);
