@@ -8,7 +8,7 @@ export default function App() {
         Audit any website
       </h1>
       <p className="mb-8 text-center text-slate-500">
-        Paste a URL to see its mobile performance and what to fix first.
+        Paste a URL to see its performance and what to fix first.
       </p>
       <UrlForm />
     </Layout>

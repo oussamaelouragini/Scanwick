@@ -1,37 +1,50 @@
-import { useState } from 'react'
-import ScoreCard from './components/ScoreCard'
-import ProblemsList from './components/ProblemsList'
-import { clsTone, lcpTone, scoreTone } from './rating'
-import type { AuditResult } from './types'
+import { useState } from "react";
+import ScoreCard from "./components/ScoreCard";
+import ProblemsList from "./components/ProblemsList";
+import { clsTone, lcpTone, scoreTone } from "./rating";
+import type { AuditResult } from "./types";
+
+type Strategy = "mobile" | "desktop";
 
 export default function UrlForm() {
-  const [url, setUrl] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<AuditResult | null>(null)
+  const [url, setUrl] = useState("");
+  const [strategy, setStrategy] = useState<Strategy>("mobile");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<AuditResult | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError(null)
-    setResult(null)
+    e.preventDefault();
+    setError(null);
+    setResult(null);
 
-    const cleaned = url.trim()
-    const fullUrl = /^https?:\/\//i.test(cleaned) ? cleaned : `https://${cleaned}`
+    // Add https:// if the user typed only "example.com"
+    const cleaned = url.trim();
+    const fullUrl = /^https?:\/\//i.test(cleaned)
+      ? cleaned
+      : `https://${cleaned}`;
 
-    setLoading(true)
+    setLoading(true);
     try {
-      const res = await fetch('http://localhost:3000/api/audit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: fullUrl }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Something went wrong.')
-      setResult(data)
+      const res = await fetch("http://localhost:3000/api/audit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: fullUrl, strategy }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Something went wrong.");
+      setResult(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.')
+      if (err instanceof TypeError) {
+        // fetch throws a TypeError when the server cannot be reached
+        setError(
+          "Cannot reach the Scanwick server. Is it running on port 3000?",
+        );
+      } else {
+        setError(err instanceof Error ? err.message : "Something went wrong.");
+      }
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
@@ -51,25 +64,55 @@ export default function UrlForm() {
           disabled={loading}
           className="rounded-lg bg-blue-600 px-5 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
         >
-          {loading ? 'Analyzing...' : 'Analyze'}
+          {loading ? "Analyzing..." : "Analyze"}
         </button>
       </form>
 
+      {/* Mobile / Desktop toggle */}
+      <div className="mt-3 inline-flex rounded-lg border border-slate-300 bg-white p-1 text-sm">
+        {(["mobile", "desktop"] as const).map((option) => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => setStrategy(option)}
+            disabled={loading}
+            className={`rounded-md px-3 py-1 capitalize ${
+              strategy === option ? "bg-blue-600 text-white" : "text-slate-600"
+            }`}
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+
+      {/* Loading skeleton */}
       {loading && (
-        <p className="mt-4 text-sm text-slate-500">
-          Running the audit, this can take up to 30 seconds...
-        </p>
+        <div className="mt-8 animate-pulse space-y-4">
+          <div className="grid gap-4 sm:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-28 rounded-xl bg-slate-200" />
+            ))}
+          </div>
+          <div className="h-20 rounded-xl bg-slate-200" />
+          <div className="h-20 rounded-xl bg-slate-200" />
+          <p className="text-center text-sm text-slate-500">
+            Running the audit, this can take up to 30 seconds...
+          </p>
+        </div>
       )}
 
       {error && (
-        <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>
+        <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </p>
       )}
 
       {result && (
         <section className="mt-8 space-y-8">
           <div>
             <p className="mb-3 break-all text-sm text-slate-500">
-              Mobile results for {result.url}
+              <span className="capitalize">{result.strategy}</span> results for{" "}
+              {result.url}
             </p>
             <div className="grid gap-4 sm:grid-cols-3">
               <ScoreCard
@@ -94,21 +137,29 @@ export default function UrlForm() {
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <ScoreCard
                 label="Page weight"
-                value={result.pageWeightMb !== null ? `${result.pageWeightMb} MB` : 'n/a'}
+                value={
+                  result.pageWeightMb !== null
+                    ? `${result.pageWeightMb} MB`
+                    : "n/a"
+                }
               />
               <ScoreCard
                 label="Network requests"
-                value={result.requests !== null ? String(result.requests) : 'n/a'}
+                value={
+                  result.requests !== null ? String(result.requests) : "n/a"
+                }
               />
             </div>
           </div>
 
           <div>
-            <h2 className="mb-3 text-lg font-semibold text-slate-900">Top problems to fix</h2>
+            <h2 className="mb-3 text-lg font-semibold text-slate-900">
+              Top problems to fix
+            </h2>
             <ProblemsList problems={result.problems} />
           </div>
         </section>
       )}
     </div>
-  )
+  );
 }

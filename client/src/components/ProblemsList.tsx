@@ -11,7 +11,7 @@ export default function ProblemsList({ problems }: { problems: Problem[] }) {
   }
 
   return (
-    <ol className="space-y-3">
+    <ul className="space-y-3">
       {problems.map((problem, index) => (
         <li
           key={problem.id}
@@ -39,6 +39,6 @@ export default function ProblemsList({ problems }: { problems: Problem[] }) {
           )}
         </li>
       ))}
-    </ol>
+    </ul>
   );
 }

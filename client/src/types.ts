@@ -1,4 +1,5 @@
-// Represents a performance problem identified during a Lighthouse audit
+export type Strategy = "mobile" | "desktop";
+
 export type Problem = {
   id: string;
   title: string;
@@ -6,9 +7,10 @@ export type Problem = {
   savingsMs: number;
   savingsKb: number;
 };
-// Represents the result of a Lighthouse audit for a given URL  
+
 export type AuditResult = {
   url: string;
+  strategy: Strategy;
   score: number;
   lcp: string;
   cls: string;

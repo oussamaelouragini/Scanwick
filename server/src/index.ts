@@ -22,7 +22,7 @@ type Problem = {
 // Remove markdown links and backticks from Lighthouse descriptions
 function cleanText(text: string): string {
   return text
-    .replace(/\s*\[Learn more[^\]]*\]\([^)]*\)\.?/gi, "")
+    .replace(/\s*\[Learn [^\]]*\]\([^)]*\)\.?/gi, "")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
     .replace(/`/g, "")
     .trim();
@@ -61,6 +61,7 @@ function extractProblems(audits: Record<string, any>): Problem[] {
 
 app.post("/api/audit", async (req, res) => {
   const { url } = req.body ?? {};
+  const strategy = req.body?.strategy === "desktop" ? "desktop" : "mobile";
 
   if (!url || typeof url !== "string") {
     res.status(400).json({ error: "A url is required." });
@@ -94,6 +95,7 @@ app.post("/api/audit", async (req, res) => {
   endpoint.searchParams.set("strategy", "mobile");
   endpoint.searchParams.set("category", "performance");
   endpoint.searchParams.set("key", API_KEY);
+  endpoint.searchParams.set("strategy", strategy);
 
   try {
     const response = await fetch(endpoint);
@@ -122,6 +124,7 @@ app.post("/api/audit", async (req, res) => {
         : null,
       requests: Array.isArray(requestItems) ? requestItems.length : null,
       problems: extractProblems(audits),
+      strategy,
     });
   } catch (err) {
     console.error(err);
