@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ScoreCard from "./components/ScoreCard";
 import ProblemsList from "./components/ProblemsList";
+import RecentAudits from "./components/RecentAudits";
 import { clsTone, lcpTone, scoreTone } from "./rating";
-import type { AuditResult } from "./types";
+import type { AuditResult, Strategy } from "./types";
 
-type Strategy = "mobile" | "desktop";
+const API = "http://localhost:3000";
 
 export default function UrlForm() {
   const [url, setUrl] = useState("");
@@ -12,6 +13,17 @@ export default function UrlForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AuditResult | null>(null);
+  const [history, setHistory] = useState<AuditResult[]>([]);
+
+  // Load the saved audits once, when the page opens
+  useEffect(() => {
+    fetch(`${API}/api/audits`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setHistory(Array.isArray(data) ? data : []))
+      .catch(() => {
+        // The history is optional: ignore errors silently
+      });
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,14 +38,25 @@ export default function UrlForm() {
 
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:3000/api/audit", {
+      const res = await fetch(`${API}/api/audit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: fullUrl, strategy }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Something went wrong.");
+      const data: AuditResult = await res.json();
+      if (!res.ok)
+        throw new Error(
+          (data as unknown as { error?: string }).error ??
+            "Something went wrong.",
+        );
+
       setResult(data);
+      // Add the new audit at the top of the history (only if it was saved)
+      if (data.id) {
+        setHistory((prev) =>
+          [data, ...prev.filter((a) => a.id !== data.id)].slice(0, 10),
+        );
+      }
     } catch (err) {
       if (err instanceof TypeError) {
         // fetch throws a TypeError when the server cannot be reached
@@ -46,6 +69,15 @@ export default function UrlForm() {
     } finally {
       setLoading(false);
     }
+  }
+
+  // Show a saved audit without calling Google again
+  function handleSelect(audit: AuditResult) {
+    setError(null);
+    setResult(audit);
+    setUrl(audit.url);
+    setStrategy(audit.strategy);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   return (
@@ -160,6 +192,12 @@ export default function UrlForm() {
           </div>
         </section>
       )}
+
+      <RecentAudits
+        audits={history}
+        activeId={result?.id}
+        onSelect={handleSelect}
+      />
     </div>
   );
 }

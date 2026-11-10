@@ -9,6 +9,8 @@ export type Problem = {
 };
 
 export type AuditResult = {
+  id?: string; // present when the audit was saved in MongoDB
+  createdAt?: string;
   url: string;
   strategy: Strategy;
   score: number;
