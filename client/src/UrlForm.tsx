@@ -3,8 +3,9 @@ import ScoreCard from "./components/ScoreCard";
 import ProblemsList from "./components/ProblemsList";
 import RecentAudits from "./components/RecentAudits";
 import ResponsivePreview from "./components/ResponsivePreview";
+import SeoChecklist from "./components/SeoChecklist";
 import { clsTone, lcpTone, scoreTone } from "./rating";
-import type { AuditResult, Strategy, ViewportShot } from "./types";
+import type { AuditResult, SeoReport, Strategy, ViewportShot } from "./types";
 
 const API = "http://localhost:3000";
 
@@ -16,10 +17,12 @@ export default function UrlForm() {
   const [result, setResult] = useState<AuditResult | null>(null);
   const [history, setHistory] = useState<AuditResult[]>([]);
 
+  // Browser inspection: screenshots + SEO checklist
   const [shots, setShots] = useState<ViewportShot[] | null>(null);
-  const [shotsLoading, setShotsLoading] = useState(false);
-  const [shotsError, setShotsError] = useState<string | null>(null);
-  const shotsRequest = useRef(0); // ignore answers that arrive after a newer request
+  const [seo, setSeo] = useState<SeoReport | null>(null);
+  const [inspectLoading, setInspectLoading] = useState(false);
+  const [inspectError, setInspectError] = useState<string | null>(null);
+  const inspectRequest = useRef(0); // ignore answers that arrive after a newer request
 
   // Load the saved audits once, when the page opens
   useEffect(() => {
@@ -31,29 +34,30 @@ export default function UrlForm() {
       });
   }, []);
 
-  async function loadScreenshots(targetUrl: string) {
-    const requestId = ++shotsRequest.current;
+  async function loadInspection(targetUrl: string, auditId?: string) {
+    const requestId = ++inspectRequest.current;
     setShots(null);
-    setShotsError(null);
-    setShotsLoading(true);
+    setInspectError(null);
+    setInspectLoading(true);
 
     try {
-      const res = await fetch(`${API}/api/screenshots`, {
+      const res = await fetch(`${API}/api/inspect`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: targetUrl }),
+        body: JSON.stringify({ url: targetUrl, auditId }),
       });
       const data = await res.json();
-      if (requestId !== shotsRequest.current) return;
-      if (!res.ok) throw new Error(data.error ?? "Could not load screenshots.");
+      if (requestId !== inspectRequest.current) return;
+      if (!res.ok) throw new Error(data.error ?? "Could not inspect the page.");
       setShots(data.shots);
+      setSeo(data.seo ?? null);
     } catch (err) {
-      if (requestId !== shotsRequest.current) return;
-      setShotsError(
-        err instanceof Error ? err.message : "Could not load screenshots.",
+      if (requestId !== inspectRequest.current) return;
+      setInspectError(
+        err instanceof Error ? err.message : "Could not inspect the page.",
       );
     } finally {
-      if (requestId === shotsRequest.current) setShotsLoading(false);
+      if (requestId === inspectRequest.current) setInspectLoading(false);
     }
   }
 
@@ -62,8 +66,9 @@ export default function UrlForm() {
     setError(null);
     setResult(null);
     setShots(null);
-    setShotsError(null);
-    shotsRequest.current++; // cancel the display of any pending screenshots
+    setSeo(null);
+    setInspectError(null);
+    inspectRequest.current++; // cancel the display of any pending inspection
 
     // Add https:// if the user typed only "example.com"
     const cleaned = url.trim();
@@ -81,18 +86,16 @@ export default function UrlForm() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Something went wrong.");
 
-      setResult(data as AuditResult);
+      const audit = data as AuditResult;
+      setResult(audit);
       // Add the new audit at the top of the history (only if it was saved)
-      if ((data as AuditResult).id) {
+      if (audit.id) {
         setHistory((prev) =>
-          [data as AuditResult, ...prev.filter((a) => a.id !== data.id)].slice(
-            0,
-            10,
-          ),
+          [audit, ...prev.filter((a) => a.id !== audit.id)].slice(0, 10),
         );
       }
-      // The score is shown first, the screenshots load after it
-      loadScreenshots((data as AuditResult).url);
+      // The score is shown first, the browser inspection loads after it
+      loadInspection(audit.url, audit.id);
     } catch (err) {
       if (err instanceof TypeError) {
         // fetch throws a TypeError when the server cannot be reached
@@ -113,9 +116,10 @@ export default function UrlForm() {
     setResult(audit);
     setUrl(audit.url);
     setStrategy(audit.strategy);
+    setSeo(audit.seo ?? null); // saved SEO checks show immediately
     window.scrollTo({ top: 0, behavior: "smooth" });
-    // Screenshots are not saved, so capture them again
-    loadScreenshots(audit.url);
+    // Screenshots are not saved, so capture them again (this also refreshes the SEO checks)
+    loadInspection(audit.url, audit.id);
   }
 
   return (
@@ -192,13 +196,13 @@ export default function UrlForm() {
               />
               <ScoreCard
                 label="LCP (loading)"
-                value={result.lcp}
+                value={result.lcp ?? "n/a"}
                 hint="Good: 2.5 s or less"
                 tone={lcpTone(result.lcp)}
               />
               <ScoreCard
                 label="CLS (stability)"
-                value={result.cls}
+                value={result.cls ?? "n/a"}
                 hint="Good: 0.1 or less"
                 tone={clsTone(result.cls)}
               />
@@ -229,10 +233,12 @@ export default function UrlForm() {
             <ProblemsList problems={result.problems} />
           </div>
 
+          <SeoChecklist seo={seo} loading={inspectLoading} />
+
           <ResponsivePreview
             shots={shots}
-            loading={shotsLoading}
-            error={shotsError}
+            loading={inspectLoading}
+            error={inspectError}
           />
         </section>
       )}

@@ -21,6 +21,8 @@ const auditSchema = new Schema(
     pageWeightMb: Number,
     requests: Number,
     problems: [problemSchema],
+    // SEO checklist, added after the audit by the /api/inspect route
+    seo: { type: Schema.Types.Mixed },
   },
   { timestamps: true }, // adds createdAt and updatedAt automatically
 );

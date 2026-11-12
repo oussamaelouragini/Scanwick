@@ -8,6 +8,21 @@ export type Problem = {
   savingsKb: number;
 };
 
+export type SeoStatus = "pass" | "warn" | "fail";
+
+export type SeoCheck = {
+  id: string;
+  label: string;
+  status: SeoStatus;
+  detail: string;
+};
+
+export type SeoReport = {
+  checks: SeoCheck[];
+  passed: number;
+  total: number;
+};
+
 export type AuditResult = {
   id?: string; // present when the audit was saved in MongoDB
   createdAt?: string;
@@ -19,6 +34,7 @@ export type AuditResult = {
   pageWeightMb: number | null;
   requests: number | null;
   problems: Problem[];
+  seo?: SeoReport | null;
 };
 
 export type ViewportShot = {

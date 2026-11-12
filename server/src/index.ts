@@ -1,9 +1,10 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import mongoose from "mongoose";
 import { connectDb } from "./db";
 import { Audit } from "./models/Audit";
-import { captureScreenshots } from "./screenshots";
+import { inspectPage } from "./inspect";
 
 dotenv.config();
 
@@ -103,6 +104,7 @@ function extractProblems(audits: Record<string, any>): Problem[] {
 app.post("/api/audit", async (req, res) => {
   const strategy: "mobile" | "desktop" =
     req.body?.strategy === "desktop" ? "desktop" : "mobile";
+
   if (!req.body?.url || typeof req.body.url !== "string") {
     res.status(400).json({ error: "A url is required." });
     return;
@@ -152,8 +154,14 @@ app.post("/api/audit", async (req, res) => {
       url: parsed.href,
       strategy,
       score: Math.round(lighthouse.categories.performance.score * 100),
-      lcp: audits["largest-contentful-paint"].displayValue as string,
-      cls: audits["cumulative-layout-shift"].displayValue as string,
+      lcp:
+        (audits["largest-contentful-paint"]?.displayValue as
+          | string
+          | undefined) ?? "n/a",
+      cls:
+        (audits["cumulative-layout-shift"]?.displayValue as
+          | string
+          | undefined) ?? "n/a",
       pageWeightMb: weightBytes
         ? Math.round((weightBytes / 1_000_000) * 100) / 100
         : null,
@@ -175,9 +183,11 @@ app.post("/api/audit", async (req, res) => {
     res.json({ ...payload, ...saved });
   } catch (err) {
     if (err instanceof Error && err.name === "TimeoutError") {
-      res.status(504).json({
-        error: "The audit took too long. Try again or test another URL.",
-      });
+      res
+        .status(504)
+        .json({
+          error: "The audit took too long. Try again or test another URL.",
+        });
       return;
     }
     console.error(err);
@@ -185,8 +195,9 @@ app.post("/api/audit", async (req, res) => {
   }
 });
 
-// Screenshots at phone, tablet and desktop widths (not saved in MongoDB)
-app.post("/api/screenshots", async (req, res) => {
+// Open the page in a real browser: screenshots at 3 sizes + SEO checklist.
+// Screenshots are not saved (too large), the SEO checklist is saved with the audit.
+app.post("/api/inspect", async (req, res) => {
   const parsed = parseHttpUrl(req.body?.url);
 
   if (!parsed) {
@@ -204,11 +215,26 @@ app.post("/api/screenshots", async (req, res) => {
   }
 
   try {
-    const shots = await captureScreenshots(parsed.href);
-    res.json({ url: parsed.href, shots });
+    const { shots, seo } = await inspectPage(parsed.href);
+
+    const auditId = req.body?.auditId;
+    if (
+      dbReady &&
+      seo &&
+      typeof auditId === "string" &&
+      mongoose.isValidObjectId(auditId)
+    ) {
+      try {
+        await Audit.findByIdAndUpdate(auditId, { seo });
+      } catch (err) {
+        console.error("Could not save SEO checks:", err);
+      }
+    }
+
+    res.json({ url: parsed.href, shots, seo });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Could not capture screenshots." });
+    res.status(500).json({ error: "Could not inspect the page." });
   }
 });
 
@@ -235,6 +261,7 @@ app.get("/api/audits", async (_req, res) => {
         pageWeightMb: a.pageWeightMb ?? null,
         requests: a.requests ?? null,
         problems: a.problems ?? [],
+        seo: a.seo ?? null,
         createdAt: a.createdAt,
       })),
     );

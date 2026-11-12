@@ -1,4 +1,6 @@
 import { chromium } from "playwright";
+import { buildSeoChecks } from "./seo";
+import type { RawSeo, SeoReport } from "./seo";
 
 export type ViewportShot = {
   label: string;
@@ -10,20 +12,47 @@ export type ViewportShot = {
   error?: string;
 };
 
+export type InspectionResult = {
+  shots: ViewportShot[];
+  seo: SeoReport | null;
+};
+
 const VIEWPORTS = [
   { label: "Phone", width: 375, height: 667 },
   { label: "Tablet", width: 768, height: 1024 },
   { label: "Desktop", width: 1440, height: 900 },
 ];
 
-export async function captureScreenshots(url: string): Promise<ViewportShot[]> {
+// This code runs inside the browser page. It is written as a string so the
+// server does not need the DOM types.
+const SEO_SCRIPT = `(() => {
+  const attr = (selector, name) =>
+    (document.querySelector(selector)?.getAttribute(name) ?? '').trim();
+  const h1s = Array.from(document.querySelectorAll('h1'))
+    .map((el) => (el.textContent || '').trim())
+    .filter(Boolean);
+  const images = Array.from(document.querySelectorAll('img'));
+  return {
+    title: document.title.trim(),
+    description: attr('meta[name="description"]', 'content'),
+    viewport: attr('meta[name="viewport"]', 'content'),
+    lang: (document.documentElement.getAttribute('lang') || '').trim(),
+    h1Count: h1s.length,
+    h1Text: h1s[0] || '',
+    imageCount: images.length,
+    imagesMissingAlt: images.filter((img) => !img.hasAttribute('alt')).length,
+  };
+})()`;
+
+export async function inspectPage(url: string): Promise<InspectionResult> {
   const browser = await chromium.launch();
 
   try {
     const shots: ViewportShot[] = [];
+    let seo: SeoReport | null = null;
 
     // One browser, one viewport after the other (lighter on memory)
-    for (const viewport of VIEWPORTS) {
+    for (const [index, viewport] of VIEWPORTS.entries()) {
       const context = await browser.newContext({
         viewport: { width: viewport.width, height: viewport.height },
       });
@@ -38,10 +67,20 @@ export async function captureScreenshots(url: string): Promise<ViewportShot[]> {
         await page.waitForLoadState("load", { timeout: 8_000 }).catch(() => {});
         await page.waitForTimeout(1_500);
 
+        // SEO checks are read once, on the first page load (phone size)
+        if (index === 0) {
+          try {
+            const raw = (await page.evaluate(SEO_SCRIPT)) as RawSeo;
+            seo = buildSeoChecks(raw);
+          } catch (err) {
+            console.error("Could not read SEO data:", err);
+          }
+        }
+
         // Horizontal overflow: the content is wider than the screen
-        const pageWidth = await page.evaluate(
-          () => document.documentElement.scrollWidth,
-        );
+        const pageWidth = (await page.evaluate(
+          "document.documentElement.scrollWidth",
+        )) as number;
         const buffer = await page.screenshot({ type: "jpeg", quality: 60 });
 
         shots.push({
@@ -66,7 +105,7 @@ export async function captureScreenshots(url: string): Promise<ViewportShot[]> {
       }
     }
 
-    return shots;
+    return { shots, seo };
   } finally {
     await browser.close();
   }

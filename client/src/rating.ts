@@ -8,8 +8,9 @@ export function scoreTone(score: number): Tone {
   return "poor";
 }
 
-// lcp looks like "1.8 s"
-export function lcpTone(lcp: string): Tone {
+// lcp looks like "1.8 s". It can be missing if Google could not measure it.
+export function lcpTone(lcp?: string): Tone {
+  if (!lcp) return "neutral";
   const seconds = parseFloat(lcp.replace(",", "."));
   if (Number.isNaN(seconds)) return "neutral";
   if (seconds <= 2.5) return "good";
@@ -17,8 +18,9 @@ export function lcpTone(lcp: string): Tone {
   return "poor";
 }
 
-// cls looks like "0.05"
-export function clsTone(cls: string): Tone {
+// cls looks like "0.05". It can be missing if Google could not measure it.
+export function clsTone(cls?: string): Tone {
+  if (!cls) return "neutral";
   const value = parseFloat(cls.replace(",", "."));
   if (Number.isNaN(value)) return "neutral";
   if (value <= 0.1) return "good";
