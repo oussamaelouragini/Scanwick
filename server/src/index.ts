@@ -3,21 +3,17 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { connectDb } from "./db";
 import { Audit } from "./models/Audit";
+import { captureScreenshots } from "./screenshots";
 
 dotenv.config();
 
-// ======================================
-// Configuration
-// ======================================
-
 const app = express();
-
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = 3000;
 const API_KEY = process.env.PSI_API_KEY;
-
 let dbReady = false;
 
-type Strategy = "mobile" | "desktop";
+app.use(cors({ origin: "http://localhost:5173" }));
+app.use(express.json());
 
 type Problem = {
   id: string;
@@ -27,52 +23,63 @@ type Problem = {
   savingsKb: number;
 };
 
-// ======================================
-// Middlewares
-// ======================================
+// Returns a valid http(s) URL, or null
+function parseHttpUrl(input: unknown): URL | null {
+  if (typeof input !== "string") return null;
+  try {
+    const parsed = new URL(input);
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? parsed
+      : null;
+  } catch {
+    return null;
+  }
+}
 
-app.use(
-  cors({
-    origin: "http://localhost:5173",
-  }),
-);
+// Our own browser opens the URL, so refuse local and private addresses
+function isPrivateHost(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  if (h === "localhost" || h.endsWith(".local") || h.endsWith(".internal"))
+    return true;
+  if (h === "[::1]" || h === "::1") return true;
 
-app.use(express.json());
+  const ip = h.match(/^(\d+)\.(\d+)\.\d+\.\d+$/);
+  if (ip) {
+    const a = Number(ip[1]);
+    const b = Number(ip[2]);
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168)
+    );
+  }
+  return false;
+}
 
-// ======================================
-// Clean Lighthouse descriptions
-// ======================================
-
+// Remove markdown links and backticks from Lighthouse descriptions
 function cleanText(text: string): string {
   return text
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\s*\[Learn [^\]]*\]\([^)]*\)\.?/gi, "")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
     .replace(/`/g, "")
     .trim();
 }
 
-// ======================================
-// Extract performance problems
-// ======================================
-
+// Find the audits that failed and could save time or bytes, biggest first
 function extractProblems(audits: Record<string, any>): Problem[] {
   return Object.entries(audits)
     .map(([id, audit]) => {
       const metricSavings = audit.metricSavings ?? {};
-
       const savingsMs = Math.max(
         audit.details?.overallSavingsMs ?? 0,
         metricSavings.LCP ?? 0,
         metricSavings.FCP ?? 0,
       );
-
       const savingsBytes = audit.details?.overallSavingsBytes ?? 0;
-
-      return {
-        id,
-        audit,
-        savingsMs,
-        savingsBytes,
-      };
+      return { id, audit, savingsMs, savingsBytes };
     })
     .filter(
       ({ audit, savingsMs, savingsBytes }) =>
@@ -92,67 +99,31 @@ function extractProblems(audits: Record<string, any>): Problem[] {
     }));
 }
 
-// ======================================
-// Health check
-// ======================================
-
-app.get("/api/health", (_req, res) => {
-  res.json({
-    status: "OK",
-    database: dbReady ? "connected" : "disconnected",
-    service: "Scanwick API",
-  });
-});
-
-// ======================================
-// Run PageSpeed audit
-// ======================================
-
+// Run a new audit and (if MongoDB is connected) save it
 app.post("/api/audit", async (req, res) => {
-  const { url } = req.body ?? {};
-
-  const strategy: Strategy =
+  const strategy: "mobile" | "desktop" =
     req.body?.strategy === "desktop" ? "desktop" : "mobile";
-
-  // Validate URL
-  if (!url || typeof url !== "string") {
-    res.status(400).json({
-      error: "A url is required.",
-    });
+  if (!req.body?.url || typeof req.body.url !== "string") {
+    res.status(400).json({ error: "A url is required." });
     return;
   }
 
-  let parsed: URL;
-
-  try {
-    parsed = new URL(url);
-  } catch {
-    res.status(400).json({
-      error: "Invalid URL. Example: https://example.com",
-    });
+  const parsed = parseHttpUrl(req.body.url);
+  if (!parsed) {
+    res
+      .status(400)
+      .json({ error: "Invalid URL. Example: https://example.com" });
     return;
   }
 
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    res.status(400).json({
-      error: "Only http and https URLs are allowed.",
-    });
-    return;
-  }
-
-  // Check API key
   if (!API_KEY) {
-    res.status(500).json({
-      error: "PSI_API_KEY is missing in server/.env",
-    });
+    res.status(500).json({ error: "PSI_API_KEY is missing in server/.env" });
     return;
   }
 
-  // PageSpeed API endpoint
   const endpoint = new URL(
     "https://www.googleapis.com/pagespeedonline/v5/runPagespeed",
   );
-
   endpoint.searchParams.set("url", parsed.href);
   endpoint.searchParams.set("strategy", strategy);
   endpoint.searchParams.set("category", "performance");
@@ -162,104 +133,86 @@ app.post("/api/audit", async (req, res) => {
     const response = await fetch(endpoint, {
       signal: AbortSignal.timeout(60_000),
     });
-
     const data: any = await response.json();
 
     if (!response.ok) {
-      res.status(response.status).json({
-        error: data?.error?.message ?? "PageSpeed request failed.",
-      });
+      res
+        .status(response.status)
+        .json({ error: data?.error?.message ?? "PageSpeed request failed." });
       return;
     }
 
     const lighthouse = data.lighthouseResult;
-
-    if (!lighthouse?.audits) {
-      res.status(502).json({
-        error: "Invalid PageSpeed response.",
-      });
-      return;
-    }
-
     const audits = lighthouse.audits;
 
-    // Extract metrics
     const weightBytes = audits["total-byte-weight"]?.numericValue;
-
     const requestItems = audits["network-requests"]?.details?.items;
 
-    // Build payload
     const payload = {
       url: parsed.href,
-      strategy: strategy as Strategy,
-
+      strategy,
       score: Math.round(lighthouse.categories.performance.score * 100),
-
-      lcp: audits["largest-contentful-paint"]?.displayValue ?? "N/A",
-
-      cls: audits["cumulative-layout-shift"]?.displayValue ?? "N/A",
-
+      lcp: audits["largest-contentful-paint"].displayValue as string,
+      cls: audits["cumulative-layout-shift"].displayValue as string,
       pageWeightMb: weightBytes
         ? Math.round((weightBytes / 1_000_000) * 100) / 100
         : null,
-
       requests: Array.isArray(requestItems) ? requestItems.length : null,
-
       problems: extractProblems(audits),
     };
 
-    // ======================================
-    // Save audit to MongoDB
-    // ======================================
-
-    let saved: {
-      id?: string;
-      createdAt?: Date;
-    } = {};
-
+    // Save to MongoDB. A saving error must not break the audit response.
+    let saved: { id?: string; createdAt?: Date } = {};
     if (dbReady) {
       try {
         const doc = await Audit.create(payload);
-
-        saved = {
-          id: String(doc._id),
-          createdAt: doc.get("createdAt") as Date,
-        };
-
-        console.log("Audit saved:", doc._id);
+        saved = { id: String(doc._id), createdAt: doc.get("createdAt") };
       } catch (err) {
         console.error("Could not save audit:", err);
       }
     }
 
-    // Return result
-    res.json({
-      ...payload,
-      ...saved,
-    });
+    res.json({ ...payload, ...saved });
   } catch (err) {
-    if (
-      err instanceof Error &&
-      (err.name === "TimeoutError" || err.name === "AbortError")
-    ) {
+    if (err instanceof Error && err.name === "TimeoutError") {
       res.status(504).json({
         error: "The audit took too long. Try again or test another URL.",
       });
       return;
     }
-
-    console.error("PageSpeed API error:", err);
-
-    res.status(502).json({
-      error: "Could not reach the PageSpeed API.",
-    });
+    console.error(err);
+    res.status(502).json({ error: "Could not reach the PageSpeed API." });
   }
 });
 
-// ======================================
-// Get latest 10 audits
-// ======================================
+// Screenshots at phone, tablet and desktop widths (not saved in MongoDB)
+app.post("/api/screenshots", async (req, res) => {
+  const parsed = parseHttpUrl(req.body?.url);
 
+  if (!parsed) {
+    res
+      .status(400)
+      .json({ error: "Invalid URL. Example: https://example.com" });
+    return;
+  }
+
+  if (isPrivateHost(parsed.hostname)) {
+    res
+      .status(400)
+      .json({ error: "Local and private addresses are not allowed." });
+    return;
+  }
+
+  try {
+    const shots = await captureScreenshots(parsed.href);
+    res.json({ url: parsed.href, shots });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Could not capture screenshots." });
+  }
+});
+
+// The 10 most recent saved audits
 app.get("/api/audits", async (_req, res) => {
   if (!dbReady) {
     res.json([]);
@@ -267,10 +220,12 @@ app.get("/api/audits", async (_req, res) => {
   }
 
   try {
-    const audits = await Audit.find().sort({ createdAt: -1 }).limit(10).lean();
-
+    const audits = await Audit.find()
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean<any[]>();
     res.json(
-      audits.map((a: any) => ({
+      audits.map((a) => ({
         id: String(a._id),
         url: a.url,
         strategy: a.strategy,
@@ -284,28 +239,15 @@ app.get("/api/audits", async (_req, res) => {
       })),
     );
   } catch (err) {
-    console.error("Could not load audits:", err);
-
-    res.status(500).json({
-      error: "Could not load audit history.",
-    });
+    console.error(err);
+    res.status(500).json({ error: "Could not load audit history." });
   }
 });
 
-// ======================================
-// Start server
-// ======================================
-
-async function start(): Promise<void> {
+async function start() {
   dbReady = await connectDb();
-
   app.listen(PORT, () => {
-    console.log("----------------------------------");
-    console.log("       SCANWICK API SERVER        ");
-    console.log("----------------------------------");
-    console.log(`Server: http://localhost:${PORT}`);
-    console.log(`MongoDB: ${dbReady ? "Connected" : "Disconnected"}`);
-    console.log("----------------------------------");
+    console.log(`Scanwick server running on http://localhost:${PORT}`);
   });
 }
 

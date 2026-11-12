@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ScoreCard from "./components/ScoreCard";
 import ProblemsList from "./components/ProblemsList";
 import RecentAudits from "./components/RecentAudits";
+import ResponsivePreview from "./components/ResponsivePreview";
 import { clsTone, lcpTone, scoreTone } from "./rating";
-import type { AuditResult, Strategy } from "./types";
+import type { AuditResult, Strategy, ViewportShot } from "./types";
 
 const API = "http://localhost:3000";
 
@@ -15,6 +16,11 @@ export default function UrlForm() {
   const [result, setResult] = useState<AuditResult | null>(null);
   const [history, setHistory] = useState<AuditResult[]>([]);
 
+  const [shots, setShots] = useState<ViewportShot[] | null>(null);
+  const [shotsLoading, setShotsLoading] = useState(false);
+  const [shotsError, setShotsError] = useState<string | null>(null);
+  const shotsRequest = useRef(0); // ignore answers that arrive after a newer request
+
   // Load the saved audits once, when the page opens
   useEffect(() => {
     fetch(`${API}/api/audits`)
@@ -25,10 +31,39 @@ export default function UrlForm() {
       });
   }, []);
 
+  async function loadScreenshots(targetUrl: string) {
+    const requestId = ++shotsRequest.current;
+    setShots(null);
+    setShotsError(null);
+    setShotsLoading(true);
+
+    try {
+      const res = await fetch(`${API}/api/screenshots`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: targetUrl }),
+      });
+      const data = await res.json();
+      if (requestId !== shotsRequest.current) return;
+      if (!res.ok) throw new Error(data.error ?? "Could not load screenshots.");
+      setShots(data.shots);
+    } catch (err) {
+      if (requestId !== shotsRequest.current) return;
+      setShotsError(
+        err instanceof Error ? err.message : "Could not load screenshots.",
+      );
+    } finally {
+      if (requestId === shotsRequest.current) setShotsLoading(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setResult(null);
+    setShots(null);
+    setShotsError(null);
+    shotsRequest.current++; // cancel the display of any pending screenshots
 
     // Add https:// if the user typed only "example.com"
     const cleaned = url.trim();
@@ -43,20 +78,21 @@ export default function UrlForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: fullUrl, strategy }),
       });
-      const data: AuditResult = await res.json();
-      if (!res.ok)
-        throw new Error(
-          (data as unknown as { error?: string }).error ??
-            "Something went wrong.",
-        );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Something went wrong.");
 
-      setResult(data);
+      setResult(data as AuditResult);
       // Add the new audit at the top of the history (only if it was saved)
-      if (data.id) {
+      if ((data as AuditResult).id) {
         setHistory((prev) =>
-          [data, ...prev.filter((a) => a.id !== data.id)].slice(0, 10),
+          [data as AuditResult, ...prev.filter((a) => a.id !== data.id)].slice(
+            0,
+            10,
+          ),
         );
       }
+      // The score is shown first, the screenshots load after it
+      loadScreenshots((data as AuditResult).url);
     } catch (err) {
       if (err instanceof TypeError) {
         // fetch throws a TypeError when the server cannot be reached
@@ -78,6 +114,8 @@ export default function UrlForm() {
     setUrl(audit.url);
     setStrategy(audit.strategy);
     window.scrollTo({ top: 0, behavior: "smooth" });
+    // Screenshots are not saved, so capture them again
+    loadScreenshots(audit.url);
   }
 
   return (
@@ -190,6 +228,12 @@ export default function UrlForm() {
             </h2>
             <ProblemsList problems={result.problems} />
           </div>
+
+          <ResponsivePreview
+            shots={shots}
+            loading={shotsLoading}
+            error={shotsError}
+          />
         </section>
       )}
 
