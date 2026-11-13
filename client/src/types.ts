@@ -46,3 +46,17 @@ export type ViewportShot = {
   pageWidth: number | null;
   error?: string;
 };
+
+export type Evidence = {
+  key: string;
+  value: string;
+};
+
+export type Recommendation = {
+  title: string;
+  priority: "high" | "medium" | "low";
+  why: string;
+  steps: string[];
+  code: string | null;
+  evidence: Evidence[];
+};

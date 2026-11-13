@@ -5,6 +5,12 @@ import mongoose from "mongoose";
 import { connectDb } from "./db";
 import { Audit } from "./models/Audit";
 import { inspectPage } from "./inspect";
+import {
+  AiError,
+  buildFacts,
+  getClientSummary,
+  getRecommendations,
+} from "./ai";
 
 dotenv.config();
 
@@ -235,6 +241,71 @@ app.post("/api/inspect", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Could not inspect the page." });
+  }
+});
+
+// --- AI (Groq) ---
+
+// Simple protection for the API key: 10 AI requests per minute in total
+const aiCalls: number[] = [];
+function aiRateLimited(): boolean {
+  const now = Date.now();
+  while (aiCalls.length > 0 && now - aiCalls[0] > 60_000) aiCalls.shift();
+  if (aiCalls.length >= 10) return true;
+  aiCalls.push(now);
+  return false;
+}
+
+function sendAiError(res: express.Response, err: unknown) {
+  if (err instanceof AiError) {
+    res.status(err.status).json({ error: err.message });
+    return;
+  }
+  console.error(err);
+  res.status(500).json({ error: "The AI request failed." });
+}
+
+// Fix recommendations with evidence (and code snippets)
+app.post("/api/ai/recommendations", async (req, res) => {
+  const facts = buildFacts(req.body);
+  if (!facts) {
+    res.status(400).json({ error: "Missing audit data." });
+    return;
+  }
+  if (aiRateLimited()) {
+    res
+      .status(429)
+      .json({ error: "Too many AI requests. Wait a minute and try again." });
+    return;
+  }
+
+  try {
+    const recommendations = await getRecommendations(facts, req.body?.stack);
+    res.json({ recommendations });
+  } catch (err) {
+    sendAiError(res, err);
+  }
+});
+
+// Short report for a non-technical client, in English, French or Turkish
+app.post("/api/ai/summary", async (req, res) => {
+  const facts = buildFacts(req.body);
+  if (!facts) {
+    res.status(400).json({ error: "Missing audit data." });
+    return;
+  }
+  if (aiRateLimited()) {
+    res
+      .status(429)
+      .json({ error: "Too many AI requests. Wait a minute and try again." });
+    return;
+  }
+
+  try {
+    const summary = await getClientSummary(facts, req.body?.language);
+    res.json({ summary });
+  } catch (err) {
+    sendAiError(res, err);
   }
 });
 

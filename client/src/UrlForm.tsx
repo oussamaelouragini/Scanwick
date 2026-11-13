@@ -4,6 +4,7 @@ import ProblemsList from "./components/ProblemsList";
 import RecentAudits from "./components/RecentAudits";
 import ResponsivePreview from "./components/ResponsivePreview";
 import SeoChecklist from "./components/SeoChecklist";
+import AiPanel from "./components/AiPanel";
 import { clsTone, lcpTone, scoreTone } from "./rating";
 import type { AuditResult, SeoReport, Strategy, ViewportShot } from "./types";
 
@@ -239,6 +240,14 @@ export default function UrlForm() {
             shots={shots}
             loading={inspectLoading}
             error={inspectError}
+          />
+
+          <AiPanel
+            key={`${result.url}-${result.strategy}-${result.score}`}
+            audit={result}
+            seo={seo}
+            shots={shots}
+            ready={!inspectLoading}
           />
         </section>
       )}
