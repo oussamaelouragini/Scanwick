@@ -5,6 +5,7 @@ import type {
   SeoReport,
   ViewportShot,
 } from "../types";
+import ReportExport from "./ReportExport";
 
 const API = "http://localhost:3000";
 
@@ -305,6 +306,15 @@ export default function AiPanel({ audit, seo, shots, ready }: AiPanelProps) {
           </div>
         )}
       </div>
+
+      <ReportExport
+        audit={audit}
+        seo={seo}
+        shots={shots}
+        recommendations={recommendations}
+        summary={summary}
+        ready={ready}
+      />
     </div>
   );
 }

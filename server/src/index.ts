@@ -11,6 +11,7 @@ import {
   getClientSummary,
   getRecommendations,
 } from "./ai";
+import { buildReportHtml, renderPdf } from "./report";
 
 dotenv.config();
 
@@ -20,6 +21,9 @@ const API_KEY = process.env.PSI_API_KEY;
 let dbReady = false;
 
 app.use(cors({ origin: "http://localhost:5173" }));
+// The PDF report carries the screenshots, so this route accepts a bigger body.
+// It must come before the general parser below.
+app.use("/api/report", express.json({ limit: "8mb" }));
 app.use(express.json());
 
 type Problem = {
@@ -241,6 +245,41 @@ app.post("/api/inspect", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Could not inspect the page." });
+  }
+});
+
+// --- PDF report ---
+
+let reportsRunning = 0;
+
+app.post("/api/report", async (req, res) => {
+  const html = buildReportHtml(req.body);
+  if (!html) {
+    res.status(400).json({ error: "Missing audit data." });
+    return;
+  }
+  if (reportsRunning >= 2) {
+    res
+      .status(429)
+      .json({
+        error: "Too many reports at the same time. Try again in a moment.",
+      });
+    return;
+  }
+
+  reportsRunning++;
+  try {
+    const pdf = await renderPdf(html);
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": 'attachment; filename="scanwick-report.pdf"',
+    });
+    res.send(pdf);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Could not create the PDF." });
+  } finally {
+    reportsRunning--;
   }
 });
 
