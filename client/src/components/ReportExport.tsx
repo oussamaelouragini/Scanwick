@@ -5,8 +5,7 @@ import type {
   SeoReport,
   ViewportShot,
 } from "../types";
-
-const API = "http://localhost:3000";
+import { API } from "../api";
 
 type ReportExportProps = {
   audit: AuditResult;

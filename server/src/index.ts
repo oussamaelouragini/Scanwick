@@ -16,15 +16,24 @@ import { buildReportHtml, renderPdf } from "./report";
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 const API_KEY = process.env.PSI_API_KEY;
 let dbReady = false;
 
-app.use(cors({ origin: "http://localhost:5173" }));
+const allowedOrigins = (process.env.CLIENT_ORIGIN ?? "http://localhost:5173")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(cors({ origin: allowedOrigins }));
 // The PDF report carries the screenshots, so this route accepts a bigger body.
 // It must come before the general parser below.
 app.use("/api/report", express.json({ limit: "8mb" }));
 app.use(express.json());
+
+app.get("/health", (_req, res) => {
+  res.send("ok");
+});
 
 type Problem = {
   id: string;
@@ -383,8 +392,8 @@ app.get("/api/audits", async (_req, res) => {
 
 async function start() {
   dbReady = await connectDb();
-  app.listen(PORT, () => {
-    console.log(`Scanwick server running on http://localhost:${PORT}`);
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Scanwick server running on http://0.0.0.0:${PORT}`);
   });
 }
 

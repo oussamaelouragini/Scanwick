@@ -7,9 +7,8 @@ import ResponsivePreview from "./components/ResponsivePreview";
 import SeoChecklist from "./components/SeoChecklist";
 import AiPanel from "./components/AiPanel";
 import { clsTone, lcpTone } from "./rating";
+import { API } from "./api";
 import type { AuditResult, SeoReport, Strategy, ViewportShot } from "./types";
-
-const API = "http://localhost:3000";
 
 function formatDate(iso?: string) {
   if (!iso) return "";

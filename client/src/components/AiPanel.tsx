@@ -5,9 +5,8 @@ import type {
   SeoReport,
   ViewportShot,
 } from "../types";
+import { API } from "../api";
 import ReportExport from "./ReportExport";
-
-const API = "http://localhost:3000";
 
 const STACKS = ["Any", "React", "Next.js", "WordPress", "HTML/CSS"];
 const LANGUAGES = [
