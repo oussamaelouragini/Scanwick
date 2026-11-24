@@ -16,11 +16,10 @@ const LANGUAGES = [
   { code: "tr", label: "Türkçe" },
 ];
 
-// Full class names (not built dynamically) so Tailwind can detect them
 const priorityStyle: Record<Recommendation["priority"], string> = {
-  high: "bg-red-100 text-red-700",
-  medium: "bg-amber-100 text-amber-700",
-  low: "bg-slate-100 text-slate-600",
+  high: "bg-error-container text-on-error-container",
+  medium: "bg-warning-container text-on-warning-container",
+  low: "bg-surface-container-high text-on-surface-variant",
 };
 
 type AiPanelProps = {
@@ -53,7 +52,7 @@ function CopyButton({
     <button
       type="button"
       onClick={copy}
-      className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+      className="rounded-base border border-outline-variant bg-surface-container-lowest px-2 py-0.5 font-label text-label-sm text-on-surface-variant transition-colors hover:text-on-surface"
     >
       {copied ? "Copied" : label}
     </button>
@@ -145,24 +144,43 @@ export default function AiPanel({ audit, seo, shots, ready }: AiPanelProps) {
   }
 
   const selectClass =
-    "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500";
+    "rounded-base border border-outline-variant bg-surface-container-lowest px-3 py-2 font-body text-body-md text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20";
+  const primaryButton =
+    "inline-flex shrink-0 items-center justify-center gap-gutter-sm rounded-base bg-primary px-gutter-lg py-2.5 text-on-primary transition-colors hover:bg-primary-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50";
+  const secondaryButton =
+    "inline-flex shrink-0 items-center justify-center gap-gutter-sm rounded-base border border-outline-variant bg-inverse-surface px-gutter-lg py-2.5 text-inverse-on-surface transition-colors hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50";
 
   return (
-    <div>
-      <h2 className="mb-1 text-lg font-semibold text-slate-900">
-        AI assistant
-      </h2>
-      <p className="mb-4 text-sm text-slate-500">
-        The AI only uses the measurements above. Every recommendation shows the
-        data it comes from.
-        {!ready && " Waiting for the SEO checks and screenshots to finish..."}
-      </p>
+    <section aria-labelledby="ai-heading" className="flex flex-col gap-gutter-md">
+      <div className="flex flex-wrap items-baseline justify-between gap-gutter-sm">
+        <div className="flex items-center gap-gutter-sm">
+          <span
+            className="material-symbols-outlined text-[20px] text-primary"
+            aria-hidden="true"
+          >
+            auto_awesome
+          </span>
+          <h2
+            id="ai-heading"
+            className="font-headline text-headline-md text-on-surface"
+          >
+            AI assistant
+          </h2>
+        </div>
+        <p className="font-body text-body-sm text-on-surface-variant">
+          The AI only uses the measurements above. Every recommendation shows
+          the data it comes from.
+          {!ready && " Waiting for the SEO checks and screenshots to finish..."}
+        </p>
+      </div>
 
-      {/* Recommendations */}
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <label className="text-sm text-slate-600">
-            <span className="mb-1 block">Your stack</span>
+      {/* Fix Recommendations Panel */}
+      <div className="flex flex-col gap-gutter-lg rounded-md border border-outline-variant/70 bg-surface-container-lowest p-gutter-lg shadow-sm">
+        <div className="flex flex-col gap-gutter-sm border-b border-outline-variant/50 pb-gutter-md sm:flex-row sm:items-end sm:justify-between">
+          <label className="flex flex-col gap-gutter-xs">
+            <span className="font-label text-label-sm text-on-surface-variant">
+              Your stack
+            </span>
             <select
               value={stack}
               onChange={(e) => setStack(e.target.value)}
@@ -179,75 +197,94 @@ export default function AiPanel({ audit, seo, shots, ready }: AiPanelProps) {
             type="button"
             onClick={generateRecommendations}
             disabled={!ready || recsLoading}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className={primaryButton}
           >
-            {recsLoading ? "Thinking..." : "Generate fix recommendations"}
+            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+              auto_fix_high
+            </span>
+            <span className="font-label text-label-lg">
+              {recsLoading
+                ? "Thinking..."
+                : "Generate fix recommendations"}
+            </span>
           </button>
         </div>
 
         {recsError && (
-          <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+          <p className="rounded-md border border-error-container bg-error-container/30 p-gutter-md font-body text-body-md text-on-error-container">
             {recsError}
           </p>
         )}
 
         {recsLoading && (
-          <div className="mt-4 animate-pulse space-y-3">
-            <div className="h-24 rounded-xl bg-slate-200" />
-            <div className="h-24 rounded-xl bg-slate-200" />
+          <div className="animate-pulse space-y-gutter-md">
+            <div className="h-40 rounded-md bg-surface-container-high" />
+            <div className="h-40 rounded-md bg-surface-container-high" />
           </div>
         )}
 
         {recommendations && !recsLoading && (
-          <ul className="mt-4 space-y-4">
+          <ul className="grid grid-cols-1 items-stretch gap-gutter-md lg:grid-cols-2">
             {recommendations.map((rec, index) => (
               <li
                 key={`${rec.title}-${index}`}
-                className="rounded-xl border border-slate-200 p-4"
+                className="flex h-full flex-col justify-between gap-gutter-md rounded-md border border-outline-variant/70 bg-surface-container-low/40 p-gutter-lg"
               >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <h3 className="font-medium text-slate-900">{rec.title}</h3>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${priorityStyle[rec.priority]}`}
-                  >
-                    {rec.priority} priority
-                  </span>
+                <div className="flex flex-col gap-gutter-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-gutter-sm">
+                    <h3 className="font-title text-title-md text-on-surface">
+                      {rec.title}
+                    </h3>
+                    <span
+                      className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 ${priorityStyle[rec.priority]}`}
+                    >
+                      <span className="font-label text-label-sm capitalize">
+                        {rec.priority} priority
+                      </span>
+                    </span>
+                  </div>
+
+                  <p className="font-body text-body-md text-on-surface-variant">
+                    {rec.why}
+                  </p>
+
+                  {rec.steps.length > 0 && (
+                    <ol className="list-decimal space-y-1 pl-5 font-body text-body-sm text-on-surface-variant">
+                      {rec.steps.map((step, i) => (
+                        <li key={i}>{step}</li>
+                      ))}
+                    </ol>
+                  )}
                 </div>
 
-                <p className="mt-2 text-sm text-slate-600">{rec.why}</p>
-
-                {rec.steps.length > 0 && (
-                  <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-slate-600">
-                    {rec.steps.map((step, i) => (
-                      <li key={i}>{step}</li>
-                    ))}
-                  </ol>
-                )}
-
-                {rec.code && (
-                  <div className="mt-3">
-                    <div className="mb-1 flex items-center justify-between">
-                      <span className="text-xs text-slate-400">
-                        Suggested code
-                      </span>
-                      <CopyButton text={rec.code} />
+                <div className="flex flex-col gap-gutter-sm">
+                  {rec.code && (
+                    <div className="flex flex-col gap-gutter-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-label text-label-sm text-on-surface-variant">
+                          Suggested code
+                        </span>
+                        <CopyButton text={rec.code} />
+                      </div>
+                      <pre className="overflow-x-auto rounded-base bg-inverse-surface p-3 font-mono text-mono-sm text-inverse-on-surface">
+                        <code>{rec.code}</code>
+                      </pre>
                     </div>
-                    <pre className="overflow-x-auto rounded-lg bg-slate-900 p-3 text-xs text-slate-100">
-                      <code>{rec.code}</code>
-                    </pre>
-                  </div>
-                )}
+                  )}
 
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {rec.evidence.map((item) => (
-                    <span
-                      key={item.key}
-                      className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700"
-                      title={item.key}
-                    >
-                      {item.key}: {item.value}
-                    </span>
-                  ))}
+                  {rec.evidence.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {rec.evidence.map((item) => (
+                        <span
+                          key={item.key}
+                          title={item.key}
+                          className="inline-flex rounded-full bg-surface-container-high px-2.5 py-0.5 font-mono text-mono-sm text-primary"
+                        >
+                          {item.key}: {item.value}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </li>
             ))}
@@ -255,11 +292,13 @@ export default function AiPanel({ audit, seo, shots, ready }: AiPanelProps) {
         )}
       </div>
 
-      {/* Client summary */}
-      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <label className="text-sm text-slate-600">
-            <span className="mb-1 block">Language</span>
+      {/* Client Summary Generator */}
+      <div className="flex flex-col gap-gutter-md rounded-md border border-outline-variant/70 bg-surface-container-lowest p-gutter-lg shadow-sm">
+        <div className="flex flex-col gap-gutter-sm sm:flex-row sm:items-end sm:justify-between">
+          <label className="flex flex-col gap-gutter-xs">
+            <span className="font-label text-label-sm text-on-surface-variant">
+              Language
+            </span>
             <select
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
@@ -276,31 +315,36 @@ export default function AiPanel({ audit, seo, shots, ready }: AiPanelProps) {
             type="button"
             onClick={generateSummary}
             disabled={!ready || summaryLoading}
-            className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-900 disabled:opacity-50"
+            className={secondaryButton}
           >
-            {summaryLoading ? "Writing..." : "Write client summary"}
+            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+              edit_note
+            </span>
+            <span className="font-label text-label-lg">
+              {summaryLoading ? "Writing..." : "Write client summary"}
+            </span>
           </button>
         </div>
 
         {summaryError && (
-          <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+          <p className="rounded-md border border-error-container bg-error-container/30 p-gutter-md font-body text-body-md text-on-error-container">
             {summaryError}
           </p>
         )}
 
         {summaryLoading && (
-          <div className="mt-4 h-28 animate-pulse rounded-xl bg-slate-200" />
+          <div className="h-28 animate-pulse rounded-base bg-surface-container-high" />
         )}
 
         {summary && !summaryLoading && (
-          <div className="mt-4">
-            <div className="mb-1 flex items-center justify-between">
-              <span className="text-xs text-slate-400">
+          <div className="flex flex-col gap-gutter-xs">
+            <div className="flex items-center justify-between">
+              <span className="font-label text-label-sm text-on-surface-variant">
                 Ready to send to your client
               </span>
               <CopyButton text={summary} />
             </div>
-            <p className="whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
+            <p className="whitespace-pre-wrap rounded-base bg-surface-container-low p-gutter-md text-pretty font-body text-body-md text-on-surface">
               {summary}
             </p>
           </div>
@@ -315,6 +359,6 @@ export default function AiPanel({ audit, seo, shots, ready }: AiPanelProps) {
         summary={summary}
         ready={ready}
       />
-    </div>
+    </section>
   );
 }

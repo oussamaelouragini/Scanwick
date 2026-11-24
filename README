@@ -1,0 +1,138 @@
+# Scanwick
+
+**AI-powered website auditor.** Paste a URL and get performance metrics, SEO checks, screenshots at three screen sizes, prioritized fixes with code snippets, a client-ready summary and a PDF report.
+
+![Scanwick results](docs/results.png)
+
+## Features
+
+- **Performance audit** (mobile or desktop) with the Google PageSpeed Insights API: score, LCP, CLS, page weight, number of requests and the 5 problems that would save the most loading time.
+- **SEO checks:** title and meta description length, number of H1 headings, image alt text, mobile viewport tag and page language.
+- **Responsive preview:** real browser screenshots at 375, 768 and 1440 px (Playwright), with horizontal-overflow detection.
+- **AI assistant (Groq):**
+  - prioritized fix recommendations with steps and a code snippet adapted to your stack (React, Next.js, WordPress, HTML/CSS);
+  - a short, jargon-free client summary in English, French or Turkish.
+- **PDF report** with everything above, ready to send to a client.
+- **Audit history** saved in MongoDB. Open a past audit without calling Google again.
+
+![AI recommendations](docs/ai.png)
+
+## How the AI stays honest
+
+A language model can invent problems, so Scanwick does not trust its text:
+
+1. The model never sees the page itself. It receives a short list of **facts** (for example `lcp: 6.6 s`, `seo.description: warn: 190 characters`).
+2. Each recommendation must cite the **keys** of the facts it is based on.
+3. The server checks every key against the real audit data, drops any recommendation without valid evidence, and displays **its own values** instead of the model's wording.
+4. Text coming from the audited website is treated as data, not as instructions.
+
+## Tech stack
+
+| Part                       | Tools                                         |
+| -------------------------- | --------------------------------------------- |
+| Front end                  | React, TypeScript, Vite, Tailwind CSS         |
+| Back end                   | Node.js, Express, TypeScript (run with `tsx`) |
+| Data                       | MongoDB (Mongoose)                            |
+| Browser automation and PDF | Playwright (Chromium)                         |
+| Performance data           | Google PageSpeed Insights API                 |
+| AI                         | Groq API (`openai/gpt-oss-20b` by default)    |
+
+## Getting started
+
+### Requirements
+
+- Node.js 20 or newer
+- A free [Google PageSpeed Insights API key](https://console.cloud.google.com/) (enable "PageSpeed Insights API")
+- A free [MongoDB Atlas](https://www.mongodb.com/atlas) cluster (optional: without it, audits are simply not saved)
+- A free [Groq API key](https://console.groq.com/) (optional: only needed for the AI assistant)
+
+### Run it locally
+
+```bash
+git clone https://github.com/oussamaelouragini/scanwick.git
+cd scanwick
+```
+
+**Server** (terminal 1):
+
+```bash
+cd server
+npm install
+npx playwright install chromium
+cp .env.example .env     # on Windows PowerShell: Copy-Item .env.example .env
+# edit .env and add your keys
+npm run dev
+```
+
+**Client** (terminal 2):
+
+```bash
+cd client
+npm install
+npm run dev
+```
+
+Open http://localhost:5173.
+
+### Environment variables (`server/.env`)
+
+| Variable       | Required | Description                                                |
+| -------------- | -------- | ---------------------------------------------------------- |
+| `PSI_API_KEY`  | yes      | Google PageSpeed Insights API key                          |
+| `MONGODB_URI`  | no       | MongoDB connection string. Without it, history is disabled |
+| `GROQ_API_KEY` | no       | Groq API key. Without it, the AI buttons return an error   |
+| `GROQ_MODEL`   | no       | Override the default Groq model                            |
+
+Never commit your `.env` file.
+
+## API
+
+| Route                          | Description                                             |
+| ------------------------------ | ------------------------------------------------------- |
+| `POST /api/audit`              | Runs a PageSpeed audit (`url`, `strategy`) and saves it |
+| `POST /api/inspect`            | Opens the page in Chromium: screenshots and SEO checks  |
+| `GET /api/audits`              | The 10 most recent saved audits                         |
+| `POST /api/ai/recommendations` | Fix recommendations with verified evidence              |
+| `POST /api/ai/summary`         | Client summary (`en`, `fr` or `tr`)                     |
+| `POST /api/report`             | Builds the PDF report                                   |
+
+## Project structure
+
+```
+scanwick/
+├── client/              React app
+│   └── src/
+│       ├── components/  ScoreCard, ProblemsList, SeoChecklist, ResponsivePreview, AiPanel, ...
+│       ├── UrlForm.tsx
+│       ├── rating.ts    Google's thresholds for the score, LCP and CLS
+│       └── types.ts
+└── server/              Express API
+    └── src/
+        ├── index.ts     routes
+        ├── inspect.ts   screenshots and SEO data (Playwright)
+        ├── seo.ts       SEO checks
+        ├── ai.ts        Groq calls and evidence validation
+        ├── report.ts    HTML report and PDF
+        ├── db.ts
+        └── models/Audit.ts
+```
+
+## Limitations
+
+- PageSpeed results vary a little between runs of the same URL. This is normal for Lighthouse.
+- Screenshots are not saved in the database (they are large), so they are captured again when you open a past audit.
+- There is no user login yet. Do not expose this server publicly without adding authentication and rate limits, because it uses your API keys.
+- Groq model names change over time. If the default model is retired, set `GROQ_MODEL`.
+
+## Roadmap
+
+- [x] Performance audit, history, SEO checks, screenshots
+- [x] AI recommendations, client summary, PDF export
+- [ ] Brand check: compare the site's colors and fonts with a brand guide
+- [ ] Compare two audits over time
+- [ ] Online demo
+
+## Author
+
+Oussama Elouragini, software engineering student.
+[LinkedIn](https://linkedin.com/in/oussama-elouragini) · [GitHub](https://github.com/oussamaelouragini)

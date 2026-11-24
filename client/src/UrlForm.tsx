@@ -1,14 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import ScoreCard from "./components/ScoreCard";
+import MetricCard from "./components/MetricCard";
 import ProblemsList from "./components/ProblemsList";
 import RecentAudits from "./components/RecentAudits";
 import ResponsivePreview from "./components/ResponsivePreview";
 import SeoChecklist from "./components/SeoChecklist";
 import AiPanel from "./components/AiPanel";
-import { clsTone, lcpTone, scoreTone } from "./rating";
+import { clsTone, lcpTone } from "./rating";
 import type { AuditResult, SeoReport, Strategy, ViewportShot } from "./types";
 
 const API = "http://localhost:3000";
+
+function formatDate(iso?: string) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleString(undefined, {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export default function UrlForm() {
   const [url, setUrl] = useState("");
@@ -123,118 +134,237 @@ export default function UrlForm() {
     loadInspection(audit.url, audit.id);
   }
 
-  return (
-    <div className="w-full">
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row">
-        <input
-          type="text"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://example.com"
-          className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-2 outline-none focus:border-blue-500"
-          required
-        />
-        <button
-          type="submit"
-          disabled={loading}
-          className="rounded-lg bg-blue-600 px-5 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-        >
-          {loading ? "Analyzing..." : "Analyze"}
-        </button>
-      </form>
+  const statusText = loading
+    ? "Analyzing…"
+    : result
+      ? result.createdAt
+        ? formatDate(result.createdAt)
+        : "Results ready"
+      : "Ready";
+  const statusDot = loading
+    ? "bg-warning"
+    : result
+      ? "bg-success"
+      : "bg-outline";
 
-      {/* Mobile / Desktop toggle */}
-      <div className="mt-3 inline-flex rounded-lg border border-slate-300 bg-white p-1 text-sm">
-        {(["mobile", "desktop"] as const).map((option) => (
-          <button
-            key={option}
-            type="button"
-            onClick={() => setStrategy(option)}
-            disabled={loading}
-            className={`rounded-md px-3 py-1 capitalize ${
-              strategy === option ? "bg-blue-600 text-white" : "text-slate-600"
-            }`}
+  return (
+    <div className="flex w-full flex-col gap-gutter-xl">
+      {/* Audit Command Bar */}
+      <section
+        id="new-audit"
+        aria-label="Audit target"
+        className="rounded-lg border border-outline-variant/70 bg-surface-container-lowest p-gutter-lg shadow-sm"
+      >
+        <div className="flex flex-col gap-gutter-md">
+          <div className="flex flex-col gap-gutter-sm sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-gutter-sm">
+              <h1 className="font-headline text-headline-lg text-on-surface">
+                Site audit report
+              </h1>
+              <span
+                role="status"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-surface-container-low px-2.5 py-0.5 text-on-surface-variant"
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${statusDot}`}
+                  aria-hidden="true"
+                />
+                <span className="font-mono text-mono-sm">{statusText}</span>
+              </span>
+            </div>
+
+            {/* Mobile / Desktop Emulation Switch */}
+            <div
+              role="tablist"
+              aria-label="Device profile"
+              className="inline-flex items-center gap-gutter-xs rounded-base border border-outline-variant bg-surface-container-low p-gutter-xs"
+            >
+              {(["mobile", "desktop"] as const).map((option) => (
+                <button
+                  key={option}
+                  role="tab"
+                  type="button"
+                  aria-selected={strategy === option}
+                  tabIndex={strategy === option ? 0 : -1}
+                  onClick={() => setStrategy(option)}
+                  disabled={loading}
+                  className={`inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 transition-colors disabled:opacity-50 ${
+                    strategy === option
+                      ? "bg-primary text-on-primary"
+                      : "text-on-surface-variant hover:text-on-surface"
+                  }`}
+                >
+                  <span
+                    className="material-symbols-outlined text-[16px]"
+                    aria-hidden="true"
+                  >
+                    {option === "mobile" ? "smartphone" : "desktop_windows"}
+                  </span>
+                  <span className="font-label text-label-sm capitalize">
+                    {option}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* URL Form */}
+          <form
+            onSubmit={handleSubmit}
+            className="flex flex-col gap-gutter-sm sm:flex-row sm:items-center"
           >
-            {option}
-          </button>
-        ))}
-      </div>
+            <label className="relative flex flex-1 items-center">
+              <span className="sr-only font-label text-label-sm">
+                Website URL
+              </span>
+              <span
+                className="material-symbols-outlined pointer-events-none absolute left-3 text-[18px] text-on-surface-variant"
+                aria-hidden="true"
+              >
+                language
+              </span>
+              <input
+                type="text"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://example.com"
+                inputMode="url"
+                required
+                className="w-full rounded-base border border-outline-variant bg-surface-container-lowest py-2.5 pr-gutter-md pl-10 font-mono text-body-md text-on-surface placeholder:text-outline focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={loading}
+              className="inline-flex shrink-0 items-center justify-center gap-gutter-sm rounded-base bg-primary px-gutter-lg py-2.5 text-on-primary transition-colors hover:bg-primary-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
+            >
+              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                bolt
+              </span>
+              <span className="font-label text-label-lg">
+                {loading ? "Analyzing..." : "Analyze"}
+              </span>
+            </button>
+          </form>
+        </div>
+      </section>
 
       {/* Loading skeleton */}
       {loading && (
-        <div className="mt-8 animate-pulse space-y-4">
-          <div className="grid gap-4 sm:grid-cols-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-28 rounded-xl bg-slate-200" />
-            ))}
+        <div className="animate-pulse space-y-gutter-md">
+          <div className="grid grid-cols-1 items-stretch gap-gutter-md lg:grid-cols-12">
+            <div className="h-64 rounded-md bg-surface-container-high lg:col-span-4" />
+            <div className="grid grid-cols-1 items-stretch gap-gutter-md sm:grid-cols-2 lg:col-span-8">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-32 rounded-md bg-surface-container-high" />
+              ))}
+            </div>
           </div>
-          <div className="h-20 rounded-xl bg-slate-200" />
-          <div className="h-20 rounded-xl bg-slate-200" />
-          <p className="text-center text-sm text-slate-500">
+          <p className="text-center font-body text-body-sm text-on-surface-variant">
             Running the audit, this can take up to 30 seconds...
           </p>
         </div>
       )}
 
       {error && (
-        <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+        <p className="rounded-md border border-error-container bg-error-container/30 p-gutter-md font-body text-body-md text-on-error-container">
           {error}
         </p>
       )}
 
       {result && (
-        <section className="mt-8 space-y-8">
-          <div>
-            <p className="mb-3 break-all text-sm text-slate-500">
-              <span className="capitalize">{result.strategy}</span> results for{" "}
-              {result.url}
-            </p>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <ScoreCard
-                label="Performance score"
-                value={`${result.score} / 100`}
-                tone={scoreTone(result.score)}
-              />
-              <ScoreCard
-                label="LCP (loading)"
-                value={result.lcp ?? "n/a"}
-                hint="Good: 2.5 s or less"
-                tone={lcpTone(result.lcp)}
-              />
-              <ScoreCard
-                label="CLS (stability)"
-                value={result.cls ?? "n/a"}
-                hint="Good: 0.1 or less"
-                tone={clsTone(result.cls)}
-              />
+        <>
+          {/* Executive Telemetry Grid */}
+          <section
+            aria-labelledby="metrics-heading"
+            className="flex flex-col gap-gutter-md"
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-gutter-sm">
+              <h2
+                id="metrics-heading"
+                className="font-headline text-headline-md text-on-surface"
+              >
+                Performance &amp; Core Web Vitals
+              </h2>
+              <p className="font-mono text-mono-sm text-on-surface-variant">
+                Showing {result.strategy} emulation ·{" "}
+                {result.strategy === "mobile" ? "375px" : "1280px"} viewport
+              </p>
             </div>
 
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <ScoreCard
-                label="Page weight"
-                value={
-                  result.pageWeightMb !== null
-                    ? `${result.pageWeightMb} MB`
-                    : "n/a"
-                }
-              />
-              <ScoreCard
-                label="Network requests"
-                value={
-                  result.requests !== null ? String(result.requests) : "n/a"
-                }
-              />
+            <div className="grid grid-cols-1 items-stretch gap-gutter-md lg:grid-cols-12">
+              <ScoreCard score={result.score} />
+
+              <div className="grid grid-cols-1 items-stretch gap-gutter-md sm:grid-cols-2 lg:col-span-8">
+                <MetricCard
+                  icon="speed"
+                  label="LCP (loading)"
+                  value={result.lcp ?? "n/a"}
+                  hint="Good: 2.5 s or less"
+                  tone={lcpTone(result.lcp)}
+                />
+                <MetricCard
+                  icon="view_quilt"
+                  label="CLS (stability)"
+                  value={result.cls ?? "n/a"}
+                  hint="Good: 0.1 or less"
+                  tone={clsTone(result.cls)}
+                />
+                <MetricCard
+                  icon="database"
+                  label="Page weight"
+                  value={
+                    result.pageWeightMb !== null
+                      ? `${result.pageWeightMb} MB`
+                      : "n/a"
+                  }
+                  hint="Total transferred payload"
+                />
+                <MetricCard
+                  icon="hub"
+                  label="Network requests"
+                  value={
+                    result.requests !== null ? String(result.requests) : "n/a"
+                  }
+                  hint="HTTP requests on initial load"
+                />
+              </div>
             </div>
-          </div>
+          </section>
 
-          <div>
-            <h2 className="mb-3 text-lg font-semibold text-slate-900">
-              Top problems to fix
-            </h2>
-            <ProblemsList problems={result.problems} />
-          </div>
+          {/* Two-Column Diagnostics: Top Problems + SEO Checks */}
+          <div className="grid grid-cols-1 items-start gap-gutter-xl lg:grid-cols-12">
+            <section
+              aria-labelledby="problems-heading"
+              className={`flex flex-col gap-gutter-md ${
+                seo || inspectLoading ? "lg:col-span-7" : "lg:col-span-12"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-gutter-sm">
+                <h2
+                  id="problems-heading"
+                  className="font-headline text-headline-md text-on-surface"
+                >
+                  Top problems to fix
+                </h2>
+                <span
+                  role="status"
+                  className="inline-flex items-center rounded-full bg-surface-container-high px-2.5 py-0.5 text-on-surface-variant"
+                >
+                  <span className="font-label text-label-sm tabular-nums">
+                    {result.problems.length}{" "}
+                    {result.problems.length === 1
+                      ? "opportunity"
+                      : "opportunities"}
+                  </span>
+                </span>
+              </div>
 
-          <SeoChecklist seo={seo} loading={inspectLoading} />
+              <ProblemsList problems={result.problems} />
+            </section>
+
+            <SeoChecklist seo={seo} loading={inspectLoading} />
+          </div>
 
           <ResponsivePreview
             shots={shots}
@@ -249,7 +379,7 @@ export default function UrlForm() {
             shots={shots}
             ready={!inspectLoading}
           />
-        </section>
+        </>
       )}
 
       <RecentAudits

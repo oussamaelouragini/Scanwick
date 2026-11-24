@@ -68,9 +68,9 @@ export default function ReportExport({
   }
 
   return (
-    <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <h3 className="font-medium text-slate-900">Export</h3>
-      <p className="mt-1 text-sm text-slate-500">
+    <div className="flex flex-col gap-gutter-md rounded-md border border-outline-variant/70 bg-surface-container-lowest p-gutter-lg shadow-sm">
+      <h3 className="font-title text-title-md text-on-surface">Export</h3>
+      <p className="font-body text-body-sm text-on-surface-variant">
         The PDF includes the results, problems, SEO checks and screenshots
         {recommendations || summary
           ? ", plus the AI parts you generated."
@@ -84,13 +84,18 @@ export default function ReportExport({
         type="button"
         onClick={download}
         disabled={!ready || loading}
-        className="mt-3 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+        className="inline-flex w-fit items-center justify-center gap-gutter-sm rounded-base bg-secondary px-gutter-lg py-2.5 text-on-secondary transition-colors hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
       >
-        {loading ? "Creating PDF..." : "Download PDF report"}
+        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+          picture_as_pdf
+        </span>
+        <span className="font-label text-label-lg">
+          {loading ? "Creating PDF..." : "Download PDF report"}
+        </span>
       </button>
 
       {error && (
-        <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+        <p className="rounded-md border border-error-container bg-error-container/30 p-gutter-md font-body text-body-md text-on-error-container">
           {error}
         </p>
       )}

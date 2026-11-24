@@ -5,64 +5,79 @@ type SeoChecklistProps = {
   loading: boolean;
 };
 
-// Full class names (not built dynamically) so Tailwind can detect them
 const statusStyle: Record<
   SeoStatus,
-  { icon: string; circle: string; text: string }
+  { icon: string; color: string; label: string }
 > = {
-  pass: { icon: "✓", circle: "bg-green-100 text-green-700", text: "Passed" },
-  warn: {
-    icon: "!",
-    circle: "bg-amber-100 text-amber-700",
-    text: "Could be better",
-  },
-  fail: { icon: "✕", circle: "bg-red-100 text-red-700", text: "Needs fixing" },
+  pass: { icon: "check_circle", color: "text-success", label: "Passed" },
+  warn: { icon: "warning", color: "text-warning", label: "Could be better" },
+  fail: { icon: "cancel", color: "text-error", label: "Needs fixing" },
 };
 
 export default function SeoChecklist({ seo, loading }: SeoChecklistProps) {
   // Nothing to show: the screenshots section already displays any error
   if (!seo && !loading) return null;
 
+  const allPassed = seo ? seo.passed === seo.total : false;
+
   return (
-    <div>
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold text-slate-900">SEO checks</h2>
+    <section
+      aria-labelledby="seo-heading"
+      className="flex flex-col gap-gutter-md lg:col-span-5"
+    >
+      <div className="flex items-center justify-between gap-gutter-sm">
+        <h2
+          id="seo-heading"
+          className="font-headline text-headline-md text-on-surface"
+        >
+          SEO checks
+        </h2>
         {seo && (
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-            {seo.passed} of {seo.total} passed
+          <span
+            role="status"
+            className={`inline-flex items-center rounded-full px-2.5 py-0.5 ${
+              allPassed
+                ? "bg-success-container text-on-success-container"
+                : "bg-warning-container text-on-warning-container"
+            }`}
+          >
+            <span className="font-label text-label-sm tabular-nums">
+              {seo.passed} of {seo.total} passed
+            </span>
           </span>
         )}
       </div>
 
       {!seo && loading && (
-        <div className="animate-pulse space-y-2">
+        <div className="animate-pulse space-y-gutter-sm">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-14 rounded-xl bg-slate-200" />
+            <div key={i} className="h-16 rounded-md bg-surface-container-high" />
           ))}
         </div>
       )}
 
       {seo && (
-        <ul className="space-y-2">
+        <ul className="divide-y divide-outline-variant/50 rounded-md border border-outline-variant/70 bg-surface-container-lowest shadow-sm">
           {seo.checks.map((check) => {
             const style = statusStyle[check.status];
             return (
               <li
                 key={check.id}
-                className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
+                className="flex items-start gap-gutter-sm p-gutter-md"
               >
                 <span
-                  className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm font-bold ${style.circle}`}
-                  title={style.text}
-                  aria-label={style.text}
+                  className={`material-symbols-outlined mt-0.5 shrink-0 text-[20px] ${style.color}`}
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                  title={style.label}
+                  aria-label={style.label}
                 >
                   {style.icon}
                 </span>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-slate-900">
+                  <p className="font-label text-label-lg text-on-surface">
                     {check.label}
                   </p>
-                  <p className="break-words text-sm text-slate-500">
+                  <p className="break-words font-body text-body-sm text-on-surface-variant">
                     {check.detail}
                   </p>
                 </div>
@@ -71,6 +86,6 @@ export default function SeoChecklist({ seo, loading }: SeoChecklistProps) {
           })}
         </ul>
       )}
-    </div>
+    </section>
   );
 }

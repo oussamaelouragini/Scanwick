@@ -8,10 +8,10 @@ type RecentAuditsProps = {
 };
 
 const scoreColor = {
-  good: "text-green-600",
-  average: "text-amber-600",
-  poor: "text-red-600",
-  neutral: "text-slate-900",
+  good: "text-success",
+  average: "text-warning",
+  poor: "text-error",
+  neutral: "text-on-surface",
 };
 
 function formatDate(iso?: string) {
@@ -29,42 +29,68 @@ export default function RecentAudits({
   activeId,
   onSelect,
 }: RecentAuditsProps) {
-  if (audits.length === 0) return null;
-
   return (
-    <section className="mt-10">
-      <h2 className="mb-3 text-lg font-semibold text-slate-900">
-        Recent audits
-      </h2>
-      <ul className="space-y-2">
-        {audits.map((audit) => (
-          <li key={audit.id ?? `${audit.url}-${audit.createdAt}`}>
-            <button
-              type="button"
-              onClick={() => onSelect(audit)}
-              className={`flex w-full items-center justify-between gap-3 rounded-xl border bg-white p-3 text-left shadow-sm hover:border-blue-400 ${
-                audit.id && audit.id === activeId
-                  ? "border-blue-500"
-                  : "border-slate-200"
-              }`}
-            >
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-slate-900">
-                  {audit.url}
-                </p>
-                <p className="text-xs capitalize text-slate-400">
-                  {audit.strategy} · {formatDate(audit.createdAt)}
-                </p>
-              </div>
-              <span
-                className={`text-lg font-semibold ${scoreColor[scoreTone(audit.score)]}`}
-              >
-                {audit.score}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
+    <section
+      id="recent-audits"
+      aria-labelledby="recent-heading"
+      className="flex flex-col gap-gutter-md"
+    >
+      <div className="flex items-center justify-between gap-gutter-sm">
+        <h2
+          id="recent-heading"
+          className="font-headline text-headline-md text-on-surface"
+        >
+          Recent audits
+        </h2>
+        <span
+          role="status"
+          className="inline-flex items-center rounded-full bg-surface-container-high px-2.5 py-0.5 text-on-surface-variant"
+        >
+          <span className="font-label text-label-sm tabular-nums">
+            {audits.length} saved
+          </span>
+        </span>
+      </div>
+
+      {audits.length === 0 ? (
+        <p className="rounded-md border border-outline-variant/70 bg-surface-container-lowest p-gutter-lg font-body text-body-md text-on-surface-variant">
+          No saved audits yet. Run your first audit above.
+        </p>
+      ) : (
+        <ul className="grid grid-cols-1 gap-gutter-sm sm:grid-cols-2">
+          {audits.map((audit) => {
+            const active = Boolean(audit.id && audit.id === activeId);
+            return (
+              <li key={audit.id ?? `${audit.url}-${audit.createdAt}`}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(audit)}
+                  className={`flex w-full items-center justify-between gap-gutter-sm rounded-md border bg-surface-container-lowest p-gutter-md text-left shadow-sm transition-colors hover:border-primary/60 ${
+                    active
+                      ? "border-primary/70"
+                      : "border-outline-variant/70"
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-label text-label-lg text-on-surface">
+                      {audit.url}
+                    </p>
+                    <p className="font-mono text-mono-sm capitalize text-on-surface-variant">
+                      {audit.strategy}
+                      {audit.createdAt ? ` · ${formatDate(audit.createdAt)}` : ""}
+                    </p>
+                  </div>
+                  <span
+                    className={`font-mono text-mono-lg tabular-nums ${scoreColor[scoreTone(audit.score)]}`}
+                  >
+                    {audit.score}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </section>
   );
 }
